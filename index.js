@@ -3,7 +3,7 @@ const app = express();
 
 app.use(express.json());
 
-const persons = [
+let persons = [
   {
     "id": 1,
     "name": "Arto Hellas",
@@ -41,10 +41,44 @@ app.get('/api/persons/:id', (request, response) => {
 
 })
 
+app.delete('/api/persons/:id', (request, response) => {
+  const id = Number(request.params.id);
+  persons = persons.filter(person => person.id !== id);
+  response.status(204).end()
+})
+
 
 app.get('/info', (request, response) => {
 
   response.send(`<h1>Phonebook has info for ${persons.length} people</h1> <p>${new Date()}</p>`)
+})
+
+app.post('/api/persons', (request, response) => {
+  const body = request.body
+
+  if (!body.name) {
+    return response.status(400).json({
+      error: "name missing"
+    })
+  } else if (!body.number) {
+    return response.status(400).json({
+      error: "number missing"
+    })
+  } else if (persons.find(person => person.name === body.name)) {
+    return response.status(400).json({
+      error: "name must be unique"
+    })
+  } else {
+    const person = {
+      name: body.name,
+      number: body.number || "",
+      id: Math.floor(Math.random() * 9999)
+    }
+
+    persons = persons.concat(person)
+
+    response.json(person)
+  }
 })
 
 
