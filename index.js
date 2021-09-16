@@ -1,8 +1,14 @@
 const express = require("express")
 const app = express();
-
+const cors = require('cors')
+app.use(cors());
 app.use(express.json());
+const morgan = require('morgan');
+app.use(morgan(':method :url :status :res[content-length] - :response-time ms :body'));
 
+morgan.token('body', (request, response) => {
+  return JSON.stringify(request.body)
+})
 let persons = [
   {
     "id": 1,
@@ -56,6 +62,7 @@ app.get('/info', (request, response) => {
 app.post('/api/persons', (request, response) => {
   const body = request.body
 
+  //validoidaan ettei nimi tai numero puutu ja nimi ei ole jo listassa
   if (!body.name) {
     return response.status(400).json({
       error: "name missing"
@@ -74,9 +81,7 @@ app.post('/api/persons', (request, response) => {
       number: body.number || "",
       id: Math.floor(Math.random() * 9999)
     }
-
     persons = persons.concat(person)
-
     response.json(person)
   }
 })
