@@ -1,69 +1,68 @@
+require('dotenv').config();
 const express = require("express")
 const app = express();
-const cors = require('cors')
-app.use(cors());
-app.use(express.json());
-app.use(express.static('build'))
+const cors = require('cors');
+const Person = require("./models/person")
 const morgan = require('morgan');
+app.use(express.static('build'));
+app.use(express.json());
+app.use(cors());
 app.use(morgan(':method :url :status :res[content-length] - :response-time ms :body'));
 
 morgan.token('body', (request, response) => {
   return JSON.stringify(request.body)
 })
-let persons = [
-  {
-    "id": 1,
-    "name": "Arto Hellas",
-    "number": "040-123456"
-  },
-  {
-    "id": 2,
-    "name": "Ada Lovelace",
-    "number": "39-44-5323523"
-  },
-  {
-    "id": 3,
-    "name": "Dan Abramov",
-    "number": "12-43-234345"
-  },
-  {
-    "id": 4,
-    "name": "Mary Poppendieck",
-    "number": "39-23-6423122"
-  }
-]
+
+//loggaa pyyntöjen tiedot
+const requestLogger = (request, response, next) => {
+  console.log('Method:', request.method)
+  console.log('Path:  ', request.path)
+  console.log('Body:  ', request.body)
+  console.log('---')
+  next()
+}
+app.use(requestLogger)
+
 
 app.get('/api/persons', (request, response) => {
-  response.json(persons);
+  Person.find({}).then(persons => {
+    response.json(persons);
+  })
 })
 
-app.get('/api/persons/:id', (request, response) => {
-  const id = Number(request.params.id);
-  const person = persons.find(person => person.id === id);
-  if (person) {
-    response.json(person)
-  } else {
-    response.status(404).end();
-  }
-
+app.get('/api/persons/:id', (request, response, next) => {
+  Person.findById(request.params.id).then(person => {
+    if (person) {
+      response.json(person)
+    } else {
+      response.status(404).end()
+    }
+  })
+    .catch(err => next(err))
 })
 
-app.delete('/api/persons/:id', (request, response) => {
-  const id = Number(request.params.id);
-  persons = persons.filter(person => person.id !== id);
-  response.status(204).end()
+app.delete('/api/persons/:id', (request, response, next) => {
+  Person.findByIdAndRemove(request.params.id)
+    .then(result => {
+      response.status(204).end()
+    })
+    .catch(err => next(err))
 })
 
 
 app.get('/info', (request, response) => {
 
-  response.send(`<h1>Phonebook has info for ${persons.length} people</h1> <p>${new Date()}</p>`)
+  let amount;
+  Person.count().then(count => {
+    response.send(`<h1>Phonebook has info for ${count} people</h1> <p>${new Date()}</p>`)
+  })
 })
 
+
+//Lähetetään palvelimelle tietoa
 app.post('/api/persons', (request, response) => {
   const body = request.body
 
-  //validoidaan ettei nimi tai numero puutu ja nimi ei ole jo listassa
   if (!body.name) {
     return response.status(400).json({
       error: "name missing"
@@ -72,20 +71,48 @@ app.post('/api/persons', (request, response) => {
     return response.status(400).json({
       error: "number missing"
     })
-  } else if (persons.find(person => person.name === body.name)) {
-    return response.status(400).json({
-      error: "name must be unique"
-    })
   } else {
-    const person = {
+    const person = new Person({
       name: body.name,
-      number: body.number || "",
-      id: Math.floor(Math.random() * 9999)
-    }
-    persons = persons.concat(person)
-    response.json(person)
+      number: body.number || ""
+    })
+    person.save().then(savedPerson => {
+      response.json(savedPerson);
+    })
   }
 })
+
+app.put('/api/persons/:id', (request, response, next) => {
+  const body = request.body;
+  const person = {
+    name: body.name,
+    number: body.number
+  }
+
+  Person.findByIdAndUpdate(request.params.id, person, { new: true })
+    .then(updatedPerson => {
+      response.json(updatedPerson)
+    })
+    .catch(err => next(err))
+})
+
+//olemattomien routejen käsittely
+const unknownEndpoint = (request, response) => {
+  response.status(404).send({ error: 'unknown endpoint' })
+}
+app.use(unknownEndpoint);
+
+//käsittelee virheet
+const errorHandler = (error, request, response, next) => {
+  console.error(error.message)
+
+  if (error.name === 'CastError') {
+    return response.status(400).send({ error: 'malformatted id' })
+  }
+
+  next(error)
+}
+app.use(errorHandler)
 
 
 
